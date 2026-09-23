@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portfolio Tracker — Track Your Stock Investments</title>
+<meta name="description" content="Track your stock holdings, calculate investment value, and export your portfolio — all in one clean dashboard.">
+<meta property="og:title" content="Portfolio Tracker — Track Your Stock Investments">
+<meta property="og:description" content="Simple tools for understanding your portfolio at a glance.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.383.0/umd/lucide.min.js"></script>
+<style>
+  :root{
+    --bg:#0d0e17; --surface:#15172488; --border:#7c6cf01f; --text:#f4f4f8; --muted:#9a9bb0;
+    --grad1:#8b5cf6; --grad2:#3b82f6;
+  }
+  :root:not([data-theme="light"]){}
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --bg:#f6f6fb; --surface:#ffffffcc; --border:#7c6cf033; --text:#161622; --muted:#5b5c72; }
+  }
+  :root[data-theme="light"]{ --bg:#f6f6fb; --surface:#ffffffcc; --border:#7c6cf033; --text:#161622; --muted:#5b5c72; }
+  html,body{height:100%;}
+  html{scroll-padding-top: env(safe-area-inset-top,0px); scroll-behavior:smooth;}
+  body{
+    background:var(--bg); color:var(--text); font-family:'Inter',sans-serif;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+    overflow-x:hidden;
+  }
+  .font-display{font-family:'Space Grotesk',sans-serif;}
+  .font-serif-italic{font-family:'Instrument Serif',serif; font-style:italic;}
+  .grad-text{background:linear-gradient(90deg,var(--grad1),var(--grad2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .glass{background:var(--surface); border:1px solid var(--border); backdrop-filter:blur(14px);}
+  .grain{position:relative;}
+  .grain::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.06; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .beam{position:absolute; width:450px; height:450px; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, rgba(139,92,246,.25), transparent 70%); filter:blur(10px); transition:transform .15s ease-out; z-index:0;}
+  /* Visible by default. JS opts elements INTO the pre-animation state so a script
+     failure never leaves content permanently hidden. */
+  .fade-up{transition:opacity .6s ease, transform .6s ease;}
+  .fade-up.pre{opacity:0; transform:translateY(24px);}
+  .fade-up.pre.in{opacity:1; transform:translateY(0);}
+  @media (prefers-reduced-motion: reduce){
+    .fade-up{opacity:1!important; transform:none!important; transition:none!important;}
+    .beam{display:none;}
+    html{scroll-behavior:auto;}
+  }
+  .btn-primary{background:linear-gradient(90deg,var(--grad1),var(--grad2)); transition:filter .2s, transform .2s;}
+  .btn-primary:hover{filter:brightness(1.12); transform:translateY(-1px);}
+  input:focus-visible, button:focus-visible, a:focus-visible{outline:2px solid var(--grad2); outline-offset:2px;}
+  table{border-collapse:collapse;}
+  ::-webkit-scrollbar{height:8px; width:8px;}
+</style>
+</head>
+<body class="antialiased">
+
+<div id="toast-region" class="fixed top-4 right-4 z-50 flex flex-col gap-2" style="top:calc(1rem + env(safe-area-inset-top,0px));" aria-live="polite"></div>
+
+<!-- HEADER -->
+<header class="sticky top-0 z-40 glass" style="top:env(safe-area-inset-top,0px);">
+  <div class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+    <a href="#/" class="flex items-center gap-2 font-display font-bold text-lg">
+      <i data-lucide="trending-up" class="w-6 h-6" style="color:var(--grad1)"></i>
+      Folio<span class="grad-text">Track</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6 text-sm" aria-label="Primary">
+      <a href="#/" class="hover:opacity-80">Dashboard</a>
+      <a href="#add-stock" class="hover:opacity-80">Add Stock</a>
+      <a href="#holdings" class="hover:opacity-80">Holdings</a>
+      <button id="theme-toggle" aria-label="Toggle dark and light mode" class="p-2 rounded-lg glass"><i data-lucide="moon" class="w-4 h-4"></i></button>
+    </nav>
+    <button id="menu-btn" class="md:hidden p-2" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+      <i data-lucide="menu" class="w-6 h-6"></i>
+    </button>
+  </div>
+  <div id="mobile-menu" class="md:hidden hidden glass border-t" style="border-color:var(--border)">
+    <nav class="flex flex-col p-4 gap-3 text-sm" aria-label="Mobile">
+      <a href="#/" class="py-1">Dashboard</a>
+      <a href="#add-stock" class="py-1">Add Stock</a>
+      <a href="#holdings" class="py-1">Holdings</a>
+      <button id="theme-toggle-m" class="flex items-center gap-2 py-1"><i data-lucide="moon" class="w-4 h-4"></i> Toggle theme</button>
+    </nav>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer class="max-w-6xl mx-auto px-5 py-10 text-sm text-center" style="color:var(--muted)">
+  <p>Built for clarity — designed for momentum. Questions? <a class="underline" href="mailto:support@foliotrack.app">support@foliotrack.app</a></p>
+</footer>
+
+<!-- ===== TEMPLATES ===== -->
+<template id="tpl-dashboard">
+<section class="relative overflow-hidden grain" style="background:radial-gradient(120% 100% at 50% -10%, #241b4a 0%, var(--bg) 60%)">
+  <div class="beam" id="beam" style="left:-200px; top:-200px;"></div>
+  <div class="max-w-6xl mx-auto px-5 pt-16 pb-20 relative z-10 text-center fade-up">
+    <span class="inline-flex items-center gap-2 glass rounded-full px-4 py-1.5 text-xs font-medium mb-6" style="color:var(--muted)">
+      📈 SMARTER PORTFOLIO TRACKING
+    </span>
+    <h1 class="font-display text-4xl md:text-6xl font-bold leading-tight mb-4">
+      Track your <span class="grad-text">investments</span><br class="hidden sm:block"> with <span class="font-serif-italic grad-text">clarity</span>.
+    </h1>
+    <p class="max-w-xl mx-auto mb-8" style="color:var(--muted)">Simple tools for understanding your portfolio at a glance. Enter your holdings, and we calculate the rest.</p>
+    <div class="flex flex-wrap justify-center gap-3">
+      <a href="#add-stock" class="btn-primary text-white font-medium px-6 py-3 rounded-xl inline-flex items-center gap-2">
+        Add Your First Stock <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </a>
+      <a href="#holdings" class="glass px-6 py-3 rounded-xl font-medium">View Holdings</a>
+    </div>
+  </div>
+</section>
+
+<section class="max-w-6xl mx-auto px-5 -mt-10 relative z-10 fade-up">
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="summary-cards"></div>
+</section>
+
+<section class="max-w-6xl mx-auto px-5 py-16 grid grid-cols-1 md:grid-cols-3 gap-5 fade-up">
+  <div class="glass rounded-2xl p-6" style="border-color:#8b5cf655">
+    <i data-lucide="bar-chart-3" class="w-8 h-8 mb-3" style="color:var(--grad1)"></i>
+    <h3 class="font-display font-semibold mb-1">📊 Track</h3>
+    <p class="text-sm" style="color:var(--muted)">Monitor every holding in one dashboard, updated the moment you add a stock.</p>
+  </div>
+  <div class="glass rounded-2xl p-6 md:mt-6" style="border-color:#8b5cf655">
+    <i data-lucide="dollar-sign" class="w-8 h-8 mb-3" style="color:var(--grad2)"></i>
+    <h3 class="font-display font-semibold mb-1">💰 Calculate</h3>
+    <p class="text-sm" style="color:var(--muted)">Investment value is calculated automatically — price × quantity, no spreadsheets needed.</p>
+  </div>
+  <div class="glass rounded-2xl p-6" style="border-color:#8b5cf655">
+    <i data-lucide="download" class="w-8 h-8 mb-3" style="color:var(--grad1)"></i>
+    <h3 class="font-display font-semibold mb-1">📁 Export</h3>
+    <p class="text-sm" style="color:var(--muted)">Save your portfolio as a CSV whenever you want a copy outside the app.</p>
+  </div>
+</section>
+
+<section id="add-stock" class="max-w-3xl mx-auto px-5 py-10 fade-up">
+  <div class="glass rounded-2xl p-6 md:p-8">
+    <h2 class="font-display text-2xl font-bold mb-1">Add a stock</h2>
+    <p class="text-sm mb-6" style="color:var(--muted)">Supported symbols: AAPL, TSLA, GOOGL, MSFT, AMZN, NVDA, META</p>
+    <form id="add-form" class="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-end" novalidate>
+      <div>
+        <label for="symbol-input" class="block text-xs font-medium mb-1">Stock symbol</label>
+        <input id="symbol-input" name="symbol" type="text" autocomplete="off" placeholder="e.g. AAPL"
+          class="w-full rounded-lg px-3 py-2.5 bg-transparent glass" aria-describedby="symbol-error">
+      </div>
+      <div>
+        <label for="qty-input" class="block text-xs font-medium mb-1">Quantity</label>
+        <input id="qty-input" name="qty" type="number" min="1" step="1" placeholder="e.g. 5"
+          class="w-full rounded-lg px-3 py-2.5 bg-transparent glass" aria-describedby="qty-error">
+      </div>
+      <button type="submit" class="btn-primary text-white font-medium px-5 py-2.5 rounded-lg inline-flex items-center justify-center gap-2">
+        <i data-lucide="plus" class="w-4 h-4"></i> Add Stock
+      </button>
+    </form>
+    <div id="form-message" class="mt-3 text-sm" role="status"></div>
+  </div>
+</section>
+
+<section id="holdings" class="max-w-6xl mx-auto px-5 py-10 fade-up">
+  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+    <h2 class="font-display text-2xl font-bold">Portfolio holdings</h2>
+    <div class="flex gap-2">
+      <button id="export-btn" class="glass px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+      <button id="clear-btn" class="glass px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2" style="color:#f87171"><i data-lucide="trash-2" class="w-4 h-4"></i> Clear All</button>
+    </div>
+  </div>
+  <div id="holdings-region"></div>
+</section>
+</template>
+
+<template id="tpl-row">
+  <tr class="border-b" style="border-color:var(--border)">
+    <td class="py-3 pr-3 font-medium whitespace-nowrap"></td>
+    <td class="py-3 pr-3 whitespace-nowrap"></td>
+    <td class="py-3 pr-3 whitespace-nowrap"></td>
+    <td class="py-3 pr-3 font-semibold whitespace-nowrap"></td>
+    <td class="py-3 text-right whitespace-nowrap"></td>
+  </tr>
+</template>
+
+<template id="tpl-empty">
+  <div class="glass rounded-2xl p-10 text-center">
+    <div class="text-4xl mb-3">📊</div>
+    <h3 class="font-display font-semibold text-lg mb-1">Your portfolio is empty</h3>
+    <p class="text-sm mb-5" style="color:var(--muted)">Add your first stock to start tracking your investment.</p>
+    <a href="#add-stock" class="btn-primary text-white font-medium px-5 py-2.5 rounded-lg inline-flex items-center gap-2 mx-auto w-fit">
+      <i data-lucide="plus" class="w-4 h-4"></i> Add Your First Stock
+    </a>
+  </div>
+</template>
+
+<template id="tpl-404">
+  <section class="max-w-2xl mx-auto px-5 py-24 text-center fade-up in">
+    <i data-lucide="compass" class="w-12 h-12 mx-auto mb-4" style="color:var(--grad1)"></i>
+    <h1 class="font-display text-6xl font-bold grad-text mb-3">404</h1>
+    <p class="mb-6" style="color:var(--muted)">This page isn't part of your portfolio.</p>
+    <a href="#/" class="btn-primary text-white font-medium px-6 py-3 rounded-xl inline-flex items-center gap-2 mx-auto w-fit">
+      <i data-lucide="home" class="w-4 h-4"></i> Back to Dashboard
+    </a>
+  </section>
+</template>
+
+<script>
+(function(){
+  "use strict";
+  var stockPrices = { AAPL:180, TSLA:250, GOOGL:140, MSFT:420, AMZN:190, NVDA:130, META:550 };
+
+  // Safe icon rendering: never let a missing/blocked lucide script break the rest of the app.
+  function renderIcons(){
+    try{ if(typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons(); }
+    catch(e){ /* icons are cosmetic; app must keep working without them */ }
+  }
+
+  // ---------- theme ----------
+  function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); try{localStorage.setItem('ft-theme', t);}catch(e){} }
+  (function initTheme(){
+    var saved = null; try{ saved = localStorage.getItem('ft-theme'); }catch(e){}
+    applyTheme(saved || 'dark');
+  })();
+  function toggleTheme(){
+    var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  }
+  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+  document.getElementById('theme-toggle-m').addEventListener('click', toggleTheme);
+
+  // ---------- mobile menu ----------
+  var menuBtn = document.getElementById('menu-btn'), mobileMenu = document.getElementById('mobile-menu');
+  menuBtn.addEventListener('click', function(){
+    var open = mobileMenu.classList.toggle('hidden') === false;
+    menuBtn.setAttribute('aria-expanded', String(open));
+    menuBtn.innerHTML = open ? '<i data-lucide="x" class="w-6 h-6"></i>' : '<i data-lucide="menu" class="w-6 h-6"></i>';
+    renderIcons();
+  });
+  mobileMenu.addEventListener('click', function(e){ if(e.target.tagName==='A'){ mobileMenu.classList.add('hidden'); menuBtn.setAttribute('aria-expanded','false'); } });
+
+  // ---------- storage ----------
+  function loadPortfolio(){
+    try{
+      var raw = localStorage.getItem('ft-portfolio');
+      if(!raw) return [];
+      var parsed = JSON.parse(raw);
+      if(!Array.isArray(parsed)) return [];
+      return parsed.filter(function(h){ return h && typeof h.symbol==='string' && typeof h.qty==='number' && h.qty>0; });
+    }catch(e){ return []; }
+  }
+  function savePortfolio(p){ try{ localStorage.setItem('ft-portfolio', JSON.stringify(p)); }catch(e){} }
+
+  var portfolio = loadPortfolio();
+
+  // ---------- toast ----------
+  function toast(msg, type){
+    var region = document.getElementById('toast-region');
+    var el = document.createElement('div');
+    var isErr = type === 'error';
+    el.className = 'glass rounded-lg px-4 py-3 text-sm flex items-center gap-2 shadow-lg';
+    el.style.borderColor = isErr ? '#f8717166' : '#4ade8066';
+    el.setAttribute('role', isErr ? 'alert' : 'status');
+    el.innerHTML = '<i data-lucide="'+(isErr?'alert-circle':'check-circle')+'" class="w-4 h-4" style="color:'+(isErr?'#f87171':'#4ade80')+'"></i><span>'+msg+'</span>';
+    region.appendChild(el);
+    renderIcons();
+    setTimeout(function(){ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(function(){ el.remove(); }, 300); }, 3200);
+  }
+
+  // ---------- money fmt ----------
+  function money(n){ return '$' + n.toLocaleString(undefined, {maximumFractionDigits:2}); }
+
+  // ---------- render dashboard ----------
+  function renderSummary(){
+    var total = portfolio.reduce(function(s,h){ return s + stockPrices[h.symbol]*h.qty; }, 0);
+    var el = document.getElementById('summary-cards');
+    if(!el) return;
+    el.innerHTML = [
+      cardHTML('dollar-sign', '💰 Total Investment', money(total)),
+      cardHTML('layers', '📊 Number of Holdings', String(portfolio.length)),
+      cardHTML('trending-up', '📈 Portfolio Items', String(portfolio.reduce(function(s,h){return s+h.qty;},0)) + ' shares')
+    ].join('');
+    renderIcons();
+  }
+  function cardHTML(icon, label, value){
+    return '<div class="glass rounded-2xl p-5" style="border-color:#8b5cf655">'+
+      '<div class="flex items-center gap-2 text-xs mb-2" style="color:var(--muted)"><i data-lucide="'+icon+'" class="w-4 h-4"></i>'+label+'</div>'+
+      '<div class="font-display text-2xl font-bold">'+value+'</div></div>';
+  }
+
+  function renderHoldings(){
+    var region = document.getElementById('holdings-region');
+    if(!region) return;
+    if(portfolio.length === 0){
+      region.innerHTML = document.getElementById('tpl-empty').innerHTML;
+      renderIcons();
+      return;
+    }
+    var rows = portfolio.map(function(h, i){
+      var value = stockPrices[h.symbol] * h.qty;
+      return '<tr class="border-b" style="border-color:var(--border)">'+
+        '<td class="py-3 pr-4 font-medium whitespace-nowrap">'+h.symbol+'</td>'+
+        '<td class="py-3 pr-4 whitespace-nowrap">'+money(stockPrices[h.symbol])+'</td>'+
+        '<td class="py-3 pr-4 whitespace-nowrap">'+
+          '<input type="number" min="1" step="1" value="'+h.qty+'" data-idx="'+i+'" class="qty-edit w-20 rounded-lg px-2 py-1 bg-transparent glass" aria-label="Edit quantity for '+h.symbol+'">'+
+        '</td>'+
+        '<td class="py-3 pr-4 font-semibold whitespace-nowrap">'+money(value)+'</td>'+
+        '<td class="py-3 text-right whitespace-nowrap">'+
+          '<button class="del-btn p-2 rounded-lg glass" data-idx="'+i+'" aria-label="Remove '+h.symbol+'"><i data-lucide="trash-2" class="w-4 h-4" style="color:#f87171"></i></button>'+
+        '</td></tr>';
+    }).join('');
+    region.innerHTML = '<div class="glass rounded-2xl p-2 md:p-4 overflow-x-auto">'+
+      '<table class="w-full text-sm min-w-[520px]"><thead><tr class="text-left" style="color:var(--muted)">'+
+      '<th class="py-2 pr-4">Symbol</th><th class="py-2 pr-4">Price</th><th class="py-2 pr-4">Quantity</th><th class="py-2 pr-4">Total</th><th class="py-2 text-right">Actions</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    renderIcons();
+
+    region.querySelectorAll('.del-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var idx = Number(btn.getAttribute('data-idx'));
+        var sym = portfolio[idx].symbol;
+        portfolio.splice(idx,1);
+        savePortfolio(portfolio);
+        renderDashboardData();
+        toast('✓ '+sym+' removed from your portfolio.');
+      });
+    });
+    region.querySelectorAll('.qty-edit').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var idx = Number(inp.getAttribute('data-idx'));
+        var val = parseInt(inp.value, 10);
+        if(!val || val <= 0 || isNaN(val)){
+          toast('❌ Quantity must be greater than 0.', 'error');
+          inp.value = portfolio[idx].qty;
+          return;
+        }
+        portfolio[idx].qty = val;
+        savePortfolio(portfolio);
+        renderDashboardData();
+        toast('✓ Portfolio updated successfully.');
+      });
+    });
+  }
+
+  function renderDashboardData(){ renderSummary(); renderHoldings(); }
+
+  // ---------- routing ----------
+  var app = document.getElementById('app');
+  function route(){
+    var hash = location.hash.replace(/^#/, '') || '/';
+    var target = hash.split('?')[0];
+    if(target === '/' || target === '' || target === 'add-stock' || target === 'holdings'){
+      app.innerHTML = document.getElementById('tpl-dashboard').innerHTML;
+      renderIcons();
+      wireForm();
+      renderDashboardData();
+      wireExportClear();
+      initFadeUp();
+      initBeam();
+      if(target === 'add-stock'){ document.getElementById('add-stock').scrollIntoView({behavior:'smooth'}); }
+      if(target === 'holdings'){ document.getElementById('holdings').scrollIntoView({behavior:'smooth'}); }
+    } else {
+      app.innerHTML = document.getElementById('tpl-404').innerHTML;
+      renderIcons();
+    }
+  }
+  window.addEventListener('hashchange', route);
+
+  // ---------- add form ----------
+  function wireForm(){
+    var form = document.getElementById('add-form');
+    if(!form) return;
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var msgEl = document.getElementById('form-message');
+      var symRaw = document.getElementById('symbol-input').value.trim();
+      var qtyRaw = document.getElementById('qty-input').value.trim();
+
+      if(!symRaw){ showMsg(msgEl, '❌ Please enter a valid stock symbol.', true); return; }
+      var sym = symRaw.toUpperCase();
+      if(!(sym in stockPrices)){ showMsg(msgEl, '❌ Stock "'+symRaw+'" was not found.', true); return; }
+      if(!qtyRaw){ showMsg(msgEl, '❌ Please enter a valid quantity.', true); return; }
+      var qty = Number(qtyRaw);
+      if(!Number.isFinite(qty) || isNaN(qty)){ showMsg(msgEl, '❌ Please enter a valid quantity.', true); return; }
+      if(qty <= 0 || !Number.isInteger(qty)){ showMsg(msgEl, '❌ Quantity must be greater than 0.', true); return; }
+
+      var existing = portfolio.find(function(h){ return h.symbol === sym; });
+      if(existing){ existing.qty += qty; } else { portfolio.push({symbol:sym, qty:qty}); }
+      savePortfolio(portfolio);
+      renderDashboardData();
+      showMsg(msgEl, '✓ '+sym+' added to your portfolio.', false);
+      toast('✓ '+sym+' added to your portfolio.');
+      form.reset();
+    });
+  }
+  function showMsg(el, text, isErr){
+    el.textContent = text;
+    el.style.color = isErr ? '#f87171' : '#4ade80';
+  }
+
+  // ---------- export / clear ----------
+  function wireExportClear(){
+    var exportBtn = document.getElementById('export-btn');
+    var clearBtn = document.getElementById('clear-btn');
+    if(exportBtn) exportBtn.addEventListener('click', function(){
+      if(portfolio.length === 0){ toast('❌ Nothing to export yet.', 'error'); return; }
+      var lines = ['Stock,Price,Quantity,Total'];
+      var total = 0;
+      portfolio.forEach(function(h){
+        var val = stockPrices[h.symbol]*h.qty;
+        total += val;
+        lines.push(h.symbol+','+stockPrices[h.symbol]+','+h.qty+','+val);
+      });
+      lines.push('');
+      lines.push('Total Investment,,,'+total);
+      var blob = new Blob([lines.join('\n')], {type:'text/csv'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'portfolio.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('✓ Portfolio exported successfully.');
+    });
+    if(clearBtn) clearBtn.addEventListener('click', function(){
+      if(portfolio.length === 0) return;
+      portfolio = [];
+      savePortfolio(portfolio);
+      renderDashboardData();
+      toast('✓ Portfolio cleared.');
+    });
+  }
+
+  // ---------- fade-in on scroll ----------
+  function initFadeUp(){
+    try{
+      var els = document.querySelectorAll('.fade-up');
+      if(!('IntersectionObserver' in window)){ return; } // leave visible, no animation
+      els.forEach(function(el){ el.classList.add('pre'); }); // opt in to hidden-then-reveal
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+      }, {threshold:0.1});
+      els.forEach(function(el){ io.observe(el); });
+    }catch(e){ /* animation is cosmetic; content stays visible by default */ }
+  }
+
+  // ---------- cursor beam ----------
+  function initBeam(){
+    var beam = document.getElementById('beam');
+    var hero = beam ? beam.parentElement : null;
+    if(!beam || !hero) return;
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) { beam.style.display='none'; return; }
+    hero.addEventListener('mousemove', function(e){
+      var r = hero.getBoundingClientRect();
+      beam.style.transform = 'translate('+(e.clientX-r.left-225)+'px,'+(e.clientY-r.top-225)+'px)';
+    });
+  }
+
+  route();
+})();
+</script>
+</body>
+</html>
